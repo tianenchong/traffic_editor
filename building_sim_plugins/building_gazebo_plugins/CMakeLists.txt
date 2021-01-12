@@ -66,6 +66,27 @@ target_include_directories(slotcar
 )
 
 ###############################
+# automatic door stuff
+###############################
+
+add_library(door SHARED src/automatic_door.cpp)
+
+ament_target_dependencies(automatic_door
+  building_sim_common
+  rmf_fleet_msgs
+  rclcpp
+  gazebo_ros
+  rmf_door_msgs
+)
+
+target_include_directories(automatic_door
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    ${GAZEBO_INCLUDE_DIRS}
+)
+
+###############################
 # door stuff
 ###############################
 
@@ -203,7 +224,7 @@ endif()
 ###############################
 
 install(
-  TARGETS slotcar door lift toggle_floors toggle_charging thumbnail_generator
+  TARGETS slotcar door automatic_door lift toggle_floors toggle_charging thumbnail_generator
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
