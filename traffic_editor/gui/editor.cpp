@@ -1004,6 +1004,10 @@ void Editor::keyPressEvent(QKeyEvent* e)
       tool_button_group->button(TOOL_SELECT)->click();
       project.clear_selection(level_idx);
       clear_current_tool_buffer();
+      // right button means "exit edge drawing mode please"
+      clicked_idx = -1;
+      prev_clicked_idx = -1;
+      remove_mouse_motion_item();
       update_property_editor();
       create_scene();
       break;
@@ -1917,6 +1921,18 @@ void Editor::mouse_move(
       // we're dragging a vertex
       Vertex& pt =
         project.building.levels[level_idx].vertices[mouse_vertex_idx];
+      if (auto& impl = project.building.levels[level_idx].crowd_sim_impl)
+      {
+        auto& agent_groups = impl->get_agent_groups();
+        for (auto& agent_group:agent_groups)
+        {
+          auto sp = agent_group.get_spawn_point();
+          if (sp.first == pt.x && sp.second == pt.y)
+          {
+            agent_group.set_spawn_point(p.x(), p.y());
+          }
+        }
+      }
       pt.x = p.x();
       pt.y = p.y();
       latest_move_vertex->set_final_destination(p.x(), p.y());
