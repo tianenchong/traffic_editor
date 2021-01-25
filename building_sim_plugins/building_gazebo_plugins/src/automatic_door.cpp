@@ -43,8 +43,7 @@ public:
   std::vector<double> _previous_scan;
   DoorRequestPub::SharedPtr _door_request_pub;
   enum current_state { OPEN, MOVING, CLOSED} _current_state;
-  enum last_requested_state { OPEN, CLOSED} _last_requested_state;
-  enum transition_state { JUST_OPENED, JUST_CLOSED} _transition_state;
+  enum last_state { LAST_OPEN, LAST_CLOSED} _last_state;
   double t_since_transition_state;
 
   DoorWatcherNode()
