@@ -88,6 +88,7 @@ private:
       request.joint_name = joint.first;
       request.position = joint.second->Position(0);
       request.velocity = joint.second->GetVelocity(0);
+      //request.requester_id = _model->GetName();
       requests.push_back(request);
     }
 

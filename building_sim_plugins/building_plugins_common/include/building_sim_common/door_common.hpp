@@ -48,6 +48,7 @@ public:
     std::string joint_name;
     double position;
     double velocity;
+    //std::string requester_id;
   };
 
   struct DoorUpdateResult
@@ -56,23 +57,6 @@ public:
     double velocity;
     double fmax;
   };
-
-  template<typename SdfPtrT>
-  static std::shared_ptr<DoorCommon> make(
-    const std::string& door_name,
-    rclcpp::Node::SharedPtr node,
-    SdfPtrT& sdf);
-
-  rclcpp::Logger logger() const;
-
-  std::vector<std::string> joint_names() const;
-
-  MotionParams& params();
-
-  std::vector<DoorUpdateResult> update(const double time,
-    const std::vector<DoorUpdateRequest>& request);
-
-private:
 
   struct DoorElement
   {
@@ -106,6 +90,29 @@ private:
   // Map joint name to its DoorElement
   using Doors = std::unordered_map<std::string, DoorElement>;
 
+  template<typename SdfPtrT>
+  static std::shared_ptr<DoorCommon> make(
+    const std::string& door_name,
+    rclcpp::Node::SharedPtr node,
+    SdfPtrT& sdf);
+
+  rclcpp::Logger logger() const;
+
+  std::vector<std::string> joint_names() const;
+
+  MotionParams& params();
+
+  std::vector<DoorUpdateResult> update(const double time,
+    const std::vector<DoorUpdateRequest>& request);
+
+  bool all_doors_open();
+
+  bool all_doors_closed();
+
+  // Map of joint_name and corresponding DoorElement
+  Doors _doors;
+private:
+
   DoorMode requested_mode() const;
 
   void publish_state(const uint32_t door_value, const rclcpp::Time& time);
@@ -121,10 +128,6 @@ private:
     const MotionParams& params,
     const Doors& doors);
 
-  bool all_doors_open();
-
-  bool all_doors_closed();
-
   rclcpp::Node::SharedPtr _ros_node;
   rclcpp::Publisher<DoorState>::SharedPtr _door_state_pub;
   rclcpp::Subscription<DoorRequest>::SharedPtr _door_request_sub;
@@ -139,9 +142,6 @@ private:
   double _last_pub_time = ((double) std::rand()) / ((double) (RAND_MAX));
 
   bool _initialized = false;
-
-  // Map of joint_name and corresponding DoorElement
-  Doors _doors;
 };
 
 template<typename SdfPtrT>

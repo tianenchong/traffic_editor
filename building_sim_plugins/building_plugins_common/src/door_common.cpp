@@ -76,10 +76,14 @@ DoorCommon::DoorCommon(const std::string& door_name,
 
   _door_request_sub = _ros_node->create_subscription<DoorRequest>(
     "/door_requests", rclcpp::SystemDefaultsQoS(),
-    [&](DoorRequest::UniquePtr msg)
+    [&](
+      DoorRequest::UniquePtr msg)
     {
       if (msg->door_name == _state.door_name)
+      {
         _request = *msg;
+        //std::cout << "[" << msg->door_name << "] "<< msg->requester_id << " mode: " << msg->requested_mode.value<< std::endl; //0: close, 2: open
+      }
     });
 
   _initialized = true;
@@ -145,8 +149,10 @@ std::vector<DoorCommon::DoorUpdateResult> DoorCommon::update(
       DoorCommon::DoorUpdateResult result;
       result.joint_name = request.joint_name;
       result.fmax = _params.f_max;
+      //std::cout << request.requester_id << " ";
       if (requested_mode().value == DoorMode::MODE_OPEN)
       {
+        //std::cout << "MODE_OPEN" << std::endl;
         result.velocity = calculate_target_velocity(
           it->second.open_position,
           request.position,
@@ -155,6 +161,7 @@ std::vector<DoorCommon::DoorUpdateResult> DoorCommon::update(
       }
       else
       {
+        //std::cout << "MODE_CLOSED" << std::endl;
         result.velocity = calculate_target_velocity(
           it->second.closed_position,
           request.position,
