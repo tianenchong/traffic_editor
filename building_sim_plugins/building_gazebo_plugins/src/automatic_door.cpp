@@ -248,6 +248,27 @@ void DoorWatcherNode::listener_main(AutomaticDoorPlugin* parent)
   gazebo::transport::SubscriberPtr sub = node->Subscribe(
     "~/coe_door/coe_door_sensor_2/link/hokuyo/scan", DoorWatcherNode::cb);
 
+  node->Subscribe("/door_states", [&](DoorRequest::UniquePtr msg)
+    {
+      if (msg->door_name == "coe_door")
+      {
+        dwn_ptr->_state = *msg;
+        //std::cout << "[" << msg->door_name << "] "<< msg->requester_id << " mode: " << msg->requested_mode.value<< std::endl; //0: close, 2: open
+      }
+    });
+
+  // _door_request_sub = node->Subscribe<DoorRequest>(
+  //   "/door_requests", rclcpp::SystemDefaultsQoS(),
+  //   [&](
+  //     DoorRequest::UniquePtr msg)
+  //   {
+  //     if (msg->door_name == _state.door_name)
+  //     {
+  //       _request = *msg;
+  //       //std::cout << "[" << msg->door_name << "] "<< msg->requester_id << " mode: " << msg->requested_mode.value<< std::endl; //0: close, 2: open
+  //     }
+  //   });
+
   while (true)
     gazebo::common::Time::MSleep(10);
 }

@@ -80,6 +80,7 @@ public:
   DoorStateSub::SharedPtr _door_state_sub;
   HeartbeatPub::SharedPtr _door_heartbeat_pub;
   DoorRequest _previous_request;
+  DoorState _state;
   std::vector<double> _previous_scan;
   DoorRequestPub::SharedPtr _door_request_pub;
   enum current_state { OPEN, MOVING, CLOSED} _current_state;
