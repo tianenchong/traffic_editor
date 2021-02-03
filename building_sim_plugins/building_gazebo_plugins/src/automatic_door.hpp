@@ -94,13 +94,12 @@ public:
     const auto default_qos = rclcpp::SystemDefaultsQoS();
     _door_request_pub = create_publisher<DoorRequest>(
       AdapterDoorRequestTopicName, default_qos);
-    _door_heartbeat_pub = create_publisher<Heartbeat>(
-      DoorSupervisorHeartbeatTopicName, default_qos);
     _timestep = 0;
     _timer = false;
   }
   ~DoorWatcherNode() {}
   static void cb(ConstLaserScanStampedPtr& _msg);
+  static void state_cb(DoorState::SharedPtr msg);
   static void listener_main(AutomaticDoorPlugin* parent);
   uint16_t _timestep;
   bool _timer;
