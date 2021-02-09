@@ -108,7 +108,6 @@ void HumanVtxPropTable::update(Vertex& vertex, int level)
     }
   }
 
-  int vertices_count = idxs.size();
   std::vector<std::pair<double, double>> human_lane_vertices;
   QSet<QString> unique_human_goals;
   for (auto& idx:idxs)
@@ -149,7 +148,7 @@ void HumanVtxPropTable::update(Vertex& vertex, int level)
   for (const auto& group:agent_groups)
   {
     const auto& sp = group.get_spawn_point();
-    if (sp.first == vertex.x && sp.second == vertex.y)
+    if (sp.first == dp3(vertex.x) && sp.second == dp3(vertex.y))
     {
       spawn_number = group.get_spawn_number();
       profile = group.get_agent_profile();
@@ -225,7 +224,7 @@ void HumanVtxPropTable::update(Vertex& vertex, int level)
           for (auto& group:agent_groups)
           {
             const auto& sp = group.get_spawn_point();
-            if (sp.first == vertex.x && sp.second == vertex.y)
+            if (sp.first == dp3(vertex.x) && sp.second == dp3(vertex.y))
             {
               group.set_initial_state(text.toStdString());
               found = true;
@@ -259,7 +258,7 @@ void HumanVtxPropTable::update(Vertex& vertex, int level)
           for (auto& group:agent_groups)
           {
             const auto& sp = group.get_spawn_point();
-            if (sp.first == vertex.x && sp.second == vertex.y)
+            if (sp.first == dp3(vertex.x) && sp.second == dp3(vertex.y))
             {
               group.set_spawn_number(text.toInt());
               found = true;
@@ -301,7 +300,7 @@ void HumanVtxPropTable::update(Vertex& vertex, int level)
           for (auto& group:agent_groups)
           {
             const auto& sp = group.get_spawn_point();
-            if (sp.first == vertex.x && sp.second == vertex.y)
+            if (sp.first == dp3(vertex.x) && sp.second == dp3(vertex.y))
             {
               group.set_agent_profile(text.toStdString());
               found = true;
@@ -341,7 +340,7 @@ void HumanVtxPropTable::update(Vertex& vertex, int level)
           for (auto& group:agent_groups)
           {
             const auto& sp = group.get_spawn_point();
-            if (sp.first == vertex.x && sp.second == vertex.y)
+            if (sp.first == dp3(vertex.x) && sp.second == dp3(vertex.y))
             {
               group.set_internal_agent_model_name(text.toStdString());
               found = true;

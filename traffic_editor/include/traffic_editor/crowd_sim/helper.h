@@ -15,30 +15,17 @@
  *
 */
 
-#ifndef CALLBACKS__H
-#define CALLBACKS__H
+#ifndef CROWD_SIM_HELPER__H
+#define CROWD_SIM_HELPER__H
+#include <cmath>
 
-#include <iostream>
+namespace crowd_sim {
 
-template<typename T>
-class Callbacks
+// helper function
+static double dp3(double x)
 {
-public:
-  Callbacks(std::vector<std::pair<void(T::*)(), T*>> callbacks)
-  : _callbacks(callbacks) {}
-  ~Callbacks() {}
-
-  void initiate()
-  {
-    for (auto callback: _callbacks)
-    {
-      auto obj = callback.second;
-      auto func = callback.first;
-      (obj->*func)();
-    }
-  }
-
-  std::vector<std::pair<void (T::*)(), T*>> _callbacks;
-};
+  return std::round(x * 1000.0) / 1000.0;
+}
+}
 
 #endif

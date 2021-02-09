@@ -87,6 +87,8 @@ Editor::Editor()
 
   map_view = new MapView(this);
   map_view->setScene(scene);
+  map_view->setStyleSheet(
+    "QToolTip { color: #000000; background-color: #ffff88; border: 0px; }");
 
   QVBoxLayout* left_layout = new QVBoxLayout;
   left_layout->addWidget(map_view);
@@ -273,6 +275,8 @@ Editor::Editor()
   w->setLayout(hbox_layout);
   w->setStyleSheet("background-color: #404040");
   setCentralWidget(w);
+
+  //qApp->
 
   // PROJECT MENU
   QMenu* project_menu = menuBar()->addMenu("&Project");
@@ -614,6 +618,7 @@ void Editor::load_model_names()
 
   const double model_meters_per_pixel = y["meters_per_pixel"].as<double>();
   const YAML::Node ym = y["models"];
+  editor_models.reserve(y["models"].size());
   for (YAML::const_iterator it = ym.begin(); it != ym.end(); ++it)
     editor_models.push_back(
       EditorModel(it->as<std::string>(), model_meters_per_pixel));
@@ -1669,9 +1674,7 @@ void Editor::property_editor_cell_changed(int row, int column)
 bool Editor::create_scene()
 {
   scene->clear();  // destroys the mouse_motion_* items if they are there
-#ifdef HAS_IGNITION_PLUGIN
   project.clear_scene();  // forget all pointers to the graphics items
-#endif
   mouse_motion_line = nullptr;
   mouse_motion_model = nullptr;
   mouse_motion_ellipse = nullptr;
@@ -2605,8 +2608,11 @@ void Editor::clear_current_tool_buffer()
   {
     prev_clicked_idx = -1;
     clicked_idx = -1;
-    delete latest_add_edge;
-    latest_add_edge = NULL;
+    if (latest_add_edge)
+    {
+      delete latest_add_edge;
+      latest_add_edge = NULL;
+    }
   }
 }
 

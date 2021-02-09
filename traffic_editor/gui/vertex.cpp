@@ -21,6 +21,8 @@
 #include <QGraphicsSimpleTextItem>
 #include <QLabel>
 #include <QSvgWidget>
+#include <QGraphicsProxyWidget>
+#include <QIcon>
 
 #include "traffic_editor/vertex.h"
 using std::string;
@@ -103,7 +105,6 @@ YAML::Node Vertex::to_yaml() const
 void Vertex::draw(
   QGraphicsScene* scene,
   const double radius,
-  const QColor& color,
   bool human_vertex) const
 {
   QPen vertex_pen(Qt::black);
@@ -111,40 +112,103 @@ void Vertex::draw(
 
   const double a = 0.5;
 
-  QColor nonselected_color(color);
+  const QColor vertex_color = QColor::fromRgbF(0.0, 0.5, 0.0);
+  QColor nonselected_color(vertex_color);
   nonselected_color.setAlphaF(a);
 
   QColor selected_color = QColor::fromRgbF(1.0, 0.0, 0.0, a);
 
   if (human_vertex)
   {
-    double new_radius = 2 * (radius+10);
+    double new_radius = 2.4*(radius*1.25);
     const int svg_w_h = new_radius*2;
     auto* svg_anim =
       new QSvgWidget(QString(selected ? ":icons/human_vertex_selected.svg" :
         ":icons/human_vertex.svg"));
     svg_anim->setGeometry(x - new_radius, y - new_radius, svg_w_h, svg_w_h);
-    svg_anim->setStyleSheet("background-color: transparent; ");
-    scene->addWidget(svg_anim);
+    svg_anim->setStyleSheet("background-color: transparent;");
+    QGraphicsProxyWidget* item = scene->addWidget(svg_anim);
+    item->setZValue(20.0);
   }
   else
   {
-    scene->addEllipse(
+    const QBrush vertex_brush =
+      selected ? QBrush(selected_color) : QBrush(nonselected_color);
+
+    QGraphicsEllipseItem* ellipse_item = scene->addEllipse(
       x - radius,
       y - radius,
       2 * radius,
       2 * radius,
       vertex_pen,
-      selected ? QBrush(selected_color) : QBrush(nonselected_color));
+      vertex_brush);
+    ellipse_item->setZValue(20.0);  // above all lane/wall edges
+  }
+
+  // add some icons depending on the superpowers of this vertex
+  QPen annotation_pen(Qt::black);
+  annotation_pen.setWidthF(radius / 4.0);
+  const double icon_ring_radius = radius * 2.5;
+  const double icon_scale = 2.0 * radius / 128.0;
+
+  if (is_holding_point())
+  {
+    const double icon_bearing = -135.0 * M_PI / 180.0;
+    QIcon icon(":icons/stopwatch.svg");
+    QPixmap pixmap(icon.pixmap(icon.actualSize(QSize(128, 128))));
+    QGraphicsPixmapItem* pixmap_item = scene->addPixmap(pixmap);
+    pixmap_item->setOffset(
+      -pixmap.width() / 2,
+      -pixmap.height() / 2);
+    pixmap_item->setScale(icon_scale);
+    pixmap_item->setZValue(20.0);
+    pixmap_item->setPos(
+      x + icon_ring_radius * cos(icon_bearing),
+      y - icon_ring_radius * sin(icon_bearing));
+    pixmap_item->setToolTip("This vertex is a holding point");
+  }
+
+  if (is_parking_point())
+  {
+    const double icon_bearing = 45.0 * M_PI / 180.0;
+    QIcon icon(":icons/parking.svg");
+    QPixmap pixmap(icon.pixmap(icon.actualSize(QSize(128, 128))));
+    QGraphicsPixmapItem* pixmap_item = scene->addPixmap(pixmap);
+    pixmap_item->setOffset(
+      -pixmap.width() / 2,
+      -pixmap.height() / 2);
+    pixmap_item->setScale(icon_scale);
+    pixmap_item->setZValue(20.0);
+    pixmap_item->setPos(
+      x + icon_ring_radius * cos(icon_bearing),
+      y - icon_ring_radius * sin(icon_bearing));
+    pixmap_item->setToolTip("This vertex is a parking point");
+  }
+
+  if (is_charger())
+  {
+    const double icon_bearing = 135.0 * M_PI / 180.0;
+    QIcon icon(":icons/battery.svg");
+    QPixmap pixmap(icon.pixmap(icon.actualSize(QSize(128, 128))));
+    QGraphicsPixmapItem* pixmap_item = scene->addPixmap(pixmap);
+    pixmap_item->setOffset(
+      -pixmap.width() / 2,
+      -pixmap.height() / 2);
+    pixmap_item->setScale(icon_scale);
+    pixmap_item->setZValue(20.0);
+    pixmap_item->setPos(
+      x + icon_ring_radius * cos(icon_bearing),
+      y - icon_ring_radius * sin(icon_bearing));
+    pixmap_item->setToolTip("This vertex is a charger");
   }
 
   if (!name.empty())
   {
-    QGraphicsSimpleTextItem* item = scene->addSimpleText(
+    QGraphicsSimpleTextItem* text_item = scene->addSimpleText(
       QString::fromStdString(name),
       QFont("Helvetica", 6));
-    item->setBrush(selected ? selected_color : color);
-    item->setPos(x, y + radius);
+    text_item->setBrush(selected ? selected_color : vertex_color);
+    text_item->setPos(x, y + radius);
   }
 }
 
@@ -157,4 +221,31 @@ void Vertex::set_param(const std::string& param_name, const std::string& value)
     return;  // unknown parameter
   }
   it->second.set(value);
+}
+
+bool Vertex::is_parking_point() const
+{
+  const auto it = params.find("is_parking_spot");
+  if (it == params.end())
+    return false;
+
+  return it->second.value_bool;
+}
+
+bool Vertex::is_holding_point() const
+{
+  const auto it = params.find("is_holding_point");
+  if (it == params.end())
+    return false;
+
+  return it->second.value_bool;
+}
+
+bool Vertex::is_charger() const
+{
+  const auto it = params.find("is_charger");
+  if (it == params.end())
+    return false;
+
+  return it->second.value_bool;
 }
