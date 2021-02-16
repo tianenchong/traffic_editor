@@ -44,20 +44,16 @@ void AutomaticDoorPlugin::Load(gazebo::physics::ModelPtr model,
 
   _initialized = true;
 
-  _update_connection = gazebo::event::Events::ConnectWorldUpdateBegin(
-    std::bind(&AutomaticDoorPlugin::on_update, this));
-
   RCLCPP_INFO(_ros_node->get_logger(),
     "Finished loading [%s]",
     _model->GetName().c_str());
 
+  _main_thread = std::thread(&DoorWatcherNode::init_and_make, this);
+  _main_thread.detach();
+
   printf("Door Watcher created.\n");
-  dwn_ptr = std::make_shared<DoorWatcherNode>();
-
-  _main_thread = std::make_unique<std::thread>(
-    &DoorWatcherNode::listener_main, this);
-
-  _main_thread->detach();
+  _update_connection = gazebo::event::Events::ConnectWorldUpdateBegin(
+    std::bind(&AutomaticDoorPlugin::on_update, this));
 }
 
 void AutomaticDoorPlugin::on_update()
@@ -75,9 +71,10 @@ void AutomaticDoorPlugin::on_update()
     request.joint_name = joint.first;
     request.position = joint.second->Position(0);
     request.velocity = joint.second->GetVelocity(0);
-    //request.requester_id = "[door_watcher]";
-    //std::cout << "[door_watcher] requested velocity "<<request.velocity<<
-    //  std::endl;
+
+    ms.set_velocity_sign(request.velocity);
+
+
     requests.push_back(request);
   }
 
@@ -90,21 +87,46 @@ void AutomaticDoorPlugin::on_update()
     assert(it != _joints.end());
     it->second->SetParam("vel", 0, result.velocity);
     it->second->SetParam("fmax", 0, result.fmax);
-    //std::cout << "[door_watcher] result velocity is " << result.velocity  <<
-    //  std::endl;
   }
 }
 
-void state_cb(DoorState::SharedPtr msg)
+void DoorWatcherNode::init_and_make(AutomaticDoorPlugin* parent)
 {
-  if (msg->door_name == "coe_door")
-  {
-    dwn_ptr->_state = *msg;
-    //std::cout << "[" << msg->door_name << "] "<< msg->requester_id << " mode: " << msg->requested_mode.value<< std::endl; //0: close, 2: open
-  }
+  dwn_ptr = std::make_shared<DoorWatcherNode>();
+  dwn_ptr->_parent = parent;
+  gazebo::transport::NodePtr node(new gazebo::transport::Node());
+  node->Init();
+  const auto& name = _model->GetName();
+  gazebo::transport::SubscriberPtr sub1 = node->Subscribe(
+    "~/"+name+"/"+name+"_sensor_1/link/hokuyo/scan",
+    DoorWatcherNode::cb1);
+  gazebo::transport::SubscriberPtr sub2 = node->Subscribe(
+    "~/"+name+"/"+name+"_sensor_2/link/hokuyo/scan",
+    DoorWatcherNode::cb2);
+  dwn_ptr->_door_state_sub = dwn_ptr->create_subscription<DoorState>(
+    "door_states", rclcpp::SystemDefaultsQoS(),
+    [&](DoorState::UniquePtr msg)
+    {
+      if (msg->door_name == name)
+        dwn_ptr->_state = *msg;
+    });
+  dwn_ptr->_last_fluctuation = false;
+  rclcpp::spin(dwn_ptr);
+  rclcpp::shutdown();
 }
 
-void DoorWatcherNode::cb(ConstLaserScanStampedPtr& _msg)
+void DoorWatcherNode::cb1(ConstLaserScanStampedPtr& _msg)
+{
+  process_scan_and_actuate(_msg, dwn_ptr->_previous_scan_1);
+}
+
+void DoorWatcherNode::cb2(ConstLaserScanStampedPtr& _msg)
+{
+  process_scan_and_actuate(_msg, dwn_ptr->_previous_scan_2);
+}
+
+void DoorWatcherNode::process_scan_and_actuate(ConstLaserScanStampedPtr& _msg,
+  std::vector<double>& _previous_scan)
 {
   // Dump the message contents to stdout.
   //const std::string data;
@@ -130,88 +152,39 @@ void DoorWatcherNode::cb(ConstLaserScanStampedPtr& _msg)
     }
 
 
-    if (dwn_ptr->_previous_scan.size() != 0)
+    if (_previous_scan.size() != 0)
     {
       DoorRequest request;
-      request.door_name = "coe_door";
+      request.door_name = _model->GetName();
       request.request_time = dwn_ptr->get_clock()->now();
       //request.requester_id = "door_watcher";
       bool fluctuation = false;
       for (unsigned int i = 0; i < count; i++)
       {
-        if (trunc(current_scan[i]*1000) !=
-          trunc((dwn_ptr->_previous_scan)[i]*1000))
+        if (trunc(current_scan[i]*100) !=
+          trunc((_previous_scan)[i]*100))
         {
           fluctuation = true; //changes in sensor signal indicates activities
-          //std::cout << "["<< i <<"] "<< current_scan[i] << " " <<
-          //(dwn_ptr->_previous_scan)[i] << std::endl;
           break;
         }
       }
 
-      //request.requested_mode.value =
-      //  (fluctuation) ? DoorMode::MODE_OPEN : DoorMode::MODE_CLOSED;
-      //if (dwn_ptr->_previous_request.requested_mode.value !=
-      //  request.requested_mode.value) // different -> previously closed
-      //{
-      // std::cout << (fluctuation ? "got fluctuation" : "still") << ', ';
-      // if (dwn_ptr->_previous_request.requested_mode.value ==
-      //   DoorMode::MODE_CLOSED)
-      //   std::cout << "mode is closed" << std::endl;
-      // else if (dwn_ptr->_previous_request.requested_mode.value ==
-      //   DoorMode::MODE_OPEN)
-      //   std::cout << "mode is open" << std::endl;
-      // else if (dwn_ptr->_previous_request.requested_mode.value ==
-      //   DoorMode::MODE_MOVING)
-      //   std::cout << "mode is moving" << std::endl;
-      // else
-      //   std::cout << "dwn_ptr is something else" << std::endl;
-
-
-      //if (fluctuation &&
-      //  dwn_ptr->_previous_request.requested_mode.value !=
-      //  DoorMode::MODE_OPEN)
-      if (fluctuation &&
-        dwn_ptr->_state.current_mode.value == DoorMode::MODE_CLOSED)
+      int sign = dwn_ptr->_parent->ms.get_majority_sign();
+      if (fluctuation && !dwn_ptr->_last_fluctuation &&
+        ((dwn_ptr->_state.current_mode.value == DoorMode::MODE_CLOSED &&
+        sign == 0) ||
+        (dwn_ptr->_state.current_mode.value == DoorMode::MODE_MOVING &&
+        sign == 1))) // leading edge fluctuation and  close (sign 0 to double check closed to avoid timing mismatch) or closing
       {
-        //std::cout << "in fluctuation and previous request not mode_open" <<
-        //  std::endl;
         request.requested_mode.value = DoorMode::MODE_OPEN;
         dwn_ptr->_door_request_pub->publish(request);
-        //std::cout << "open door" << std::endl;
-        //dwn_ptr->_previous_request = request; // save open
+        std::cout << "[door watcher] opening door ... " <<
+        (fluctuation ? "GOT FLUCTUATION " : "NO FLUCTUATION ") <<
+        ((dwn_ptr->_state.current_mode.value ==
+          DoorMode::MODE_CLOSED) ? "CLOSED " : "MOVING ")<< sign << std::endl;
       }
       else
       {
-        //std::cout << "before previous request is mode_open" << std::endl;
-        // if (dwn_ptr->_state.current_mode.value ==
-        //   DoorMode::MODE_OPEN)
-        // {
-        //   //std::cout << "previous request is mode_open" << std::endl;
-        //   AutomaticDoorPlugin* parent = dwn_ptr->_parent;
-        //   std::shared_ptr<DoorCommon> door_common = parent->_door_common;
-        //   //std::cout << "before all_doors_open" << std::endl;
-        //   if (door_common->all_doors_open())
-        //   {
-        //     //std::cout << "all_doors_open" << std::endl;
-        //     if (dwn_ptr->_timer)
-        //     {
-        //       dwn_ptr->_timestep++;
-        //       if (dwn_ptr->_timestep >= 100)
-        //       {
-        //         request.requested_mode.value = DoorMode::MODE_CLOSED;
-        //         dwn_ptr->_door_request_pub->publish(request);
-        //         dwn_ptr->_timer = false;
-        //         dwn_ptr->_timestep = 0;
-        //         dwn_ptr->_previous_request = request; // save closed
-        //       }
-        //     }
-        //     else
-        //     {
-        //       dwn_ptr->_timer = true;
-        //     }
-        //   }
-        // }
         if (dwn_ptr->_state.current_mode.value == DoorMode::MODE_OPEN)
         {
           if (fluctuation)
@@ -226,6 +199,7 @@ void DoorWatcherNode::cb(ConstLaserScanStampedPtr& _msg)
             {
               request.requested_mode.value = DoorMode::MODE_CLOSED;
               dwn_ptr->_door_request_pub->publish(request);
+              std::cout << "[door watcher] closing door ... " << std::endl;
               dwn_ptr->_timer = false;
               dwn_ptr->_timestep = 0;
             }
@@ -236,87 +210,12 @@ void DoorWatcherNode::cb(ConstLaserScanStampedPtr& _msg)
           }
         }
       }
-
-      //rmf_door_msgs::msg::SupervisorHeartbeat msg;
-      //dwn_ptr->_door_heartbeat_pub->publish(msg);
-      //}
-
-      // get current state
-      /*
-      if (std::abs(_current_velocity) < 1.0e-10)
-      {
-        if (dwn_ptr->_previous_request.requested_mode.value == DoorMode::
-          MODE_OPEN)
-          dwn_ptr->_current_state = OPEN;
-        else
-          dwn_ptr->_current_state = CLOSED;
-      }
-      else
-      {
-        dwn_ptr->_current_state = MOVING;
-      }*/
-      /*
-      AutomaticDoorPlugin* parent = dwn_ptr->_parent;
-      std::shared_ptr<DoorCommon> door_common = parent->_door_common;
-      for (const auto& door : door_common->_doors)
-        std::cout << "current_position: " << door.second.current_position <<
-          std::endl;*/
-
+      dwn_ptr->_last_fluctuation = fluctuation;
     }
-    //std::cout <<
-    //  _model->GetWorld()->SimTime().Double() << '\t' << dwn_ptr->_state <<
-    //  std::endl;
-    dwn_ptr->_previous_scan = current_scan;
+    _previous_scan = current_scan;
   }
-
 }
 
-void DoorWatcherNode::listener_main(AutomaticDoorPlugin* parent)
-{
-  gazebo::transport::NodePtr node(new gazebo::transport::Node());
-  node->Init();
-
-  dwn_ptr->_parent = parent;
-
-  // Listen to Gazebo world_stats topic
-  gazebo::transport::SubscriberPtr sub = node->Subscribe(
-    "~/coe_door/coe_door_sensor_2/link/hokuyo/scan", DoorWatcherNode::cb);
-
-  // dwn_ptr->_door_state_sub = dwn_ptr->create_subscription<DoorState>(
-  //   DoorStateTopicName, default_qos,
-  //   [&](DoorState::UniquePtr msg)
-  //   {
-  //     _door_state_update(std::move(msg));
-  //   });
-
-  dwn_ptr->_door_state_sub = dwn_ptr->create_subscription<DoorState>(
-    "door_states", rclcpp::SystemDefaultsQoS(),
-    [&](DoorState::UniquePtr msg)
-    {
-      std::cout << "Got message ..." << std::endl;
-      /*
-      if (msg->door_name == "coe_door")
-      {
-        dwn_ptr->_state = *msg;
-        std::cout << "Got something ..." << std::endl;
-      }*/
-    });
-
-  // _door_request_sub = node->Subscribe<DoorRequest>(
-  //   "/door_requests", rclcpp::SystemDefaultsQoS(),
-  //   [&](
-  //     DoorRequest::UniquePtr msg)
-  //   {
-  //     if (msg->door_name == _state.door_name)
-  //     {
-  //       _request = *msg;
-  //       //std::cout << "[" << msg->door_name << "] "<< msg->requester_id << " mode: " << msg->requested_mode.value<< std::endl; //0: close, 2: open
-  //     }
-  //   });
-
-  while (true)
-    gazebo::common::Time::MSleep(10);
-}
 }
 
 GZ_REGISTER_MODEL_PLUGIN(automatic_door::AutomaticDoorPlugin)

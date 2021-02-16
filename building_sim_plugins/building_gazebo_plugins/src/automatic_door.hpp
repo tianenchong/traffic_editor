@@ -47,16 +47,54 @@ public:
 
   ~AutomaticDoorPlugin()
   {
-    if (_main_thread->joinable())
-      _main_thread->join();
+    if (_main_thread.joinable())
+      _main_thread.join();
   }
 
   void Load(gazebo::physics::ModelPtr model, sdf::ElementPtr sdf) override;
   std::shared_ptr<DoorCommon> _door_common = nullptr;
+  void on_update();
+  struct moving_state
+  {
+    enum current_state { OPEN, OPENING, CLOSED, CLOSING} _current_state;
+    int _recent_velocity_sign[10]; // plus as true and minus as false
+    int index;
+    void set_velocity_sign(double velocity)
+    {
+      if (velocity > 1e-10)
+        _recent_velocity_sign[index] = 1;
+      else if (velocity < -1e-10)
+        _recent_velocity_sign[index] = -1;
+      else
+        _recent_velocity_sign[index] = 0;
+
+      index = ++index % 10;
+    }
+    int get_majority_sign()
+    {
+      int plus_sign = 0;
+      int neutral_sign = 0;
+      int minus_sign = 0;
+      for (auto velocity_sign:_recent_velocity_sign)
+      {
+        if (velocity_sign == 1)
+          plus_sign++;
+        else if (velocity_sign == -1)
+          minus_sign++;
+        else
+          neutral_sign++;
+      }
+      if (plus_sign >= minus_sign && plus_sign >= neutral_sign)
+        return 1;
+      else if (minus_sign >= plus_sign && minus_sign >= neutral_sign)
+        return -1;
+      else
+        return 0;
+    }
+  } ms;
 
 private:
-  void on_update();
-  std::unique_ptr<std::thread> _main_thread;
+  std::thread _main_thread;
   gazebo::event::ConnectionPtr _update_connection;
   std::unordered_map<std::string, gazebo::physics::JointPtr> _joints;
   bool _initialized = false;
@@ -81,12 +119,14 @@ public:
   HeartbeatPub::SharedPtr _door_heartbeat_pub;
   DoorRequest _previous_request;
   DoorState _state;
-  std::vector<double> _previous_scan;
+  std::vector<double> _previous_scan_1;
+  std::vector<double> _previous_scan_2;
   DoorRequestPub::SharedPtr _door_request_pub;
   enum current_state { OPEN, MOVING, CLOSED} _current_state;
   enum last_state { LAST_OPEN, LAST_CLOSED} _last_state;
   double t_since_transition_state;
   AutomaticDoorPlugin* _parent;
+  bool _last_fluctuation;
 
   DoorWatcherNode()
   : rclcpp::Node("door_watcher")
@@ -98,9 +138,11 @@ public:
     _timer = false;
   }
   ~DoorWatcherNode() {}
-  static void cb(ConstLaserScanStampedPtr& _msg);
-  static void state_cb(DoorState::SharedPtr msg);
-  static void listener_main(AutomaticDoorPlugin* parent);
+  static void init_and_make(AutomaticDoorPlugin* parent);
+  static void cb1(ConstLaserScanStampedPtr& _msg);
+  static void cb2(ConstLaserScanStampedPtr& _msg);
+  static void process_scan_and_actuate(ConstLaserScanStampedPtr& _msg,
+    std::vector<double>& _previous_scan);
   uint16_t _timestep;
   bool _timer;
 };
