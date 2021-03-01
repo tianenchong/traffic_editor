@@ -28,6 +28,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QToolBar>
+#include <QTableWidget>
 
 #ifdef HAS_OPENCV
 #include <opencv2/core/core.hpp>
@@ -1451,11 +1452,38 @@ void Editor::populate_property_editor(const Edge& edge)
   int row = 8;
   for (const auto& param : edge.params)
   {
-    property_editor_set_row(
-      row,
-      QString::fromStdString(param.first),
-      param.second.to_qstring(),
-      true);
+    if (strcmp(param.first.c_str(), "plugin") == 0)
+    {
+      QComboBox* plugin_combo = new QComboBox;
+      QTableWidgetItem* label_item =
+        new QTableWidgetItem(QString::fromStdString(param.first));
+      label_item->setFlags(Qt::NoItemFlags);
+      std::string plugin_names[] = {"none", "normal", "automatic"};
+      int i = 0;
+      for (const auto& plugin_name:plugin_names)
+      {
+        plugin_combo->addItem(QString::fromStdString(plugin_name));
+        if (param.second.value_string == plugin_name)
+          plugin_combo->setCurrentIndex(i);
+        i++;
+      }
+      connect(
+        plugin_combo,
+        &QComboBox::currentTextChanged,
+        [this, vertex](const QString& text)
+        {
+        }
+      );
+      property_editor->setItem(row, 0, label_item);
+      property_editor->setCellWidget(row, 1, plugin_combo);
+    }
+    else
+      property_editor_set_row(
+        row,
+        QString::fromStdString(param.first),
+        param.second.to_qstring(),
+        true);
+
     row++;
   }
 
