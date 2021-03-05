@@ -141,6 +141,12 @@ public:
       auto vel_cmd = ecm.Component<components::JointVelocityCmd>(
         it->second);
       vel_cmd->Data()[0] = result.velocity;
+      if (result.velocity != 0)
+        std::cout<< it->second << " set: " << result.velocity <<
+            " after set: " <<
+          vel_cmd->Data()[0] << " actual: " <<
+          ecm.Component<components::JointVelocity>(it->second)->Data()[0] <<
+          std::endl;
     }
   }
 

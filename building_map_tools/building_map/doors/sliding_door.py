@@ -17,7 +17,10 @@ class SlidingDoor(Door):
         if not self.plugin == 'none':
             plugin_ele = SubElement(self.model_ele, 'plugin')
             plugin_ele.set('name', 'door')
-            plugin_ele.set('filename', 'libdoor.so')
+            if self.plugin == 'automatic':
+                plugin_ele.set('filename', 'libautomatic_door.so')
+            else:
+                plugin_ele.set('filename', 'libdoor.so')
             plugin_params = {
                 'v_max_door': '0.2',
                 'a_max_door': '0.2',

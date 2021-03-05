@@ -150,3 +150,20 @@ def joint(
         joint.append(pose)
 
     return joint
+
+
+def lidar_sensor(door_name, num=1, pose=None):
+    sensor = Element('include')
+    sensor_name = SubElement(sensor, 'name')
+    sensor_name.text = f'{door_name}_sensor_{num}'
+    uri = SubElement(sensor, 'uri')
+    uri.text = 'model://hokuyo'
+
+    if pose is not None:
+        sensor.append(pose)
+    # <include>
+    # <name>coe_door_sensor_1</name>
+    # <uri>model://hokuyo</uri>
+    # <pose>-0.2 0.7 2.5 -0.78539816339 1.57079632679 1.57079632679</pose>
+    # </include>
+    return sensor

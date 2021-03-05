@@ -1,5 +1,6 @@
+import math
 from xml.etree.ElementTree import Element, SubElement
-from..utils import door_material, box_link, joint
+from..utils import door_material, box_link, joint, lidar_sensor
 
 
 class Door:
@@ -66,6 +67,22 @@ class Door:
                                     upper_limit=bounds[1],
                                     max_effort=500.0))
 
+        if self.plugin == 'automatic':
+            z = 2.5
+            # ray pitch angle
+            vertical = math.pi/2  # 90 degree clockwise
+            slanted = 1.3
+            # ray yaw orientation angle
+            door_yaw = -(1/2)*math.pi
+            pose_ele1 = Element('pose')
+            pose_ele1.text = f'-0.03 0 {z} 0 {slanted} {-door_yaw}'
+            pose_ele2 = Element('pose')
+            pose_ele2.text = f'0.03 0 {z} 0 {slanted} {door_yaw}'
+            self.model_ele.append(lidar_sensor(
+                self.name, num=1, pose=pose_ele1))
+            self.model_ele.append(lidar_sensor(
+                self.name, num=2, pose=pose_ele2))
+
     '''Generate a single swing section/panel of a door.
 
     name = name of the door section
@@ -75,6 +92,7 @@ class Door:
     bounds = bounds for the range of motion of this section, in radians
     axis = pose of the joint axis, in the door *section* frame
     '''
+
     def generate_swing_section(
         self,
         name,
@@ -96,3 +114,24 @@ class Door:
                                     lower_limit=bounds[0],
                                     upper_limit=bounds[1],
                                     pose=pose_ele))
+        if self.plugin == 'automatic':
+            z = 2.5
+            # ray pitch angle
+            vertical = math.pi/2  # 90 degree clockwise
+            slanted = 1.3
+            # ray yaw orientation angle
+            door_yaw = -(1/2)*math.pi
+            pose_ele1 = Element('pose')
+            if name == 'left':
+                pose_ele1.text = f'-0.2 0.7 {z} 0 {vertical} {(bounds[1]+bounds[0])/2}'
+            else:
+                pose_ele1.text = f'-0.03 0 {z} 0 {slanted} {-door_yaw}'
+            pose_ele2 = Element('pose')
+            if name == 'left':
+                pose_ele2.text = f'-0.03 0 {z} 0 {slanted} {door_yaw}'
+            else:
+                pose_ele2.text = f'-0.2 -0.7 {z} 0 {vertical} {(bounds[1]+bounds[0])/2}'
+            self.model_ele.append(lidar_sensor(
+                self.name, num=1, pose=pose_ele1))
+            self.model_ele.append(lidar_sensor(
+                self.name, num=2, pose=pose_ele2))

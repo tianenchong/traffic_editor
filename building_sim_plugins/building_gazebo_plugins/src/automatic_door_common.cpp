@@ -1,93 +1,28 @@
-#include "automatic_door.hpp"
+/*
+ * Copyright (C) 2020 Open Source Robotics Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+*/
+
+
+#include "automatic_door_common.hpp"
 
 using namespace building_sim_common;
 
 namespace building_gazebo_plugins {
 //==============================================================================
 namespace automatic_door {
-
-using namespace google::protobuf;
-using DoorRequestPub = rclcpp::Publisher<DoorRequest>;
-
-void AutomaticDoorPlugin::Load(gazebo::physics::ModelPtr model,
-  sdf::ElementPtr sdf)
-{
-  auto _ros_node = gazebo_ros::Node::Get(sdf);
-  _model = model;
-
-  RCLCPP_INFO(
-    _ros_node->get_logger(),
-    "Loading AutomaticDoorPlugin for [%s]",
-    _model->GetName().c_str());
-
-  _door_common = DoorCommon::make(
-    _model->GetName(),
-    _ros_node,
-    sdf);
-
-  if (!_door_common)
-    return;
-
-  for (const auto& joint_name : _door_common->joint_names())
-  {
-    const auto joint = _model->GetJoint(joint_name);
-    if (!joint)
-    {
-      RCLCPP_ERROR(_ros_node->get_logger(),
-        " -- Model is missing the joint [%s]",
-        joint_name.c_str());
-      return;
-    }
-    _joints.insert(std::make_pair(joint_name, joint));
-  }
-
-  _initialized = true;
-
-  RCLCPP_INFO(_ros_node->get_logger(),
-    "Finished loading [%s]",
-    _model->GetName().c_str());
-
-  _main_thread = std::thread(&DoorWatcherNode::init_and_make, this);
-  _main_thread.detach();
-
-  printf("Door Watcher created.\n");
-  _update_connection = gazebo::event::Events::ConnectWorldUpdateBegin(
-    std::bind(&AutomaticDoorPlugin::on_update, this));
-}
-
-void AutomaticDoorPlugin::on_update()
-{
-  if (!_initialized)
-    return;
-
-  const double t = _model->GetWorld()->SimTime().Double();
-
-  // Create DoorUpdateRequest
-  std::vector<DoorCommon::DoorUpdateRequest> requests;
-  for (const auto& joint : _joints)
-  {
-    DoorCommon::DoorUpdateRequest request;
-    request.joint_name = joint.first;
-    request.position = joint.second->Position(0);
-    request.velocity = joint.second->GetVelocity(0);
-
-    ms.set_velocity_sign(request.velocity);
-
-
-    requests.push_back(request);
-  }
-
-  auto results = _door_common->update(t, requests);
-
-  // Apply motions to the joints
-  for (const auto& result : results)
-  {
-    const auto it = _joints.find(result.joint_name);
-    assert(it != _joints.end());
-    it->second->SetParam("vel", 0, result.velocity);
-    it->second->SetParam("fmax", 0, result.fmax);
-  }
-}
 
 void DoorWatcherNode::cb1(ConstLaserScanStampedPtr& _msg)
 {
@@ -103,8 +38,10 @@ void DoorWatcherNode::process_scan_and_actuate(ConstLaserScanStampedPtr& _msg,
   std::vector<double>& _previous_scan)
 {
   // Dump the message contents to stdout.
+  //const std::string data;
   if (_msg->has_scan())
   {
+    //std::cout << _msg->DebugString();
     const auto scan = _msg->scan();
     const auto* descriptor = scan.GetDescriptor();
     const auto* ranges_field = descriptor->FindFieldByName("ranges");
@@ -129,6 +66,7 @@ void DoorWatcherNode::process_scan_and_actuate(ConstLaserScanStampedPtr& _msg,
       DoorRequest request;
       request.door_name = _parent->_model->GetName();
       request.request_time = get_clock()->now();
+      //request.requester_id = "door_watcher
       bool fluctuation = false;
       for (unsigned int i = 0; i < count; i++)
       {
@@ -186,6 +124,7 @@ void DoorWatcherNode::process_scan_and_actuate(ConstLaserScanStampedPtr& _msg,
 std::shared_ptr<DoorWatcherNode> DoorWatcherNode::init_and_make(
   AutomaticDoorPlugin* parent)
 {
+  std::cout << "here....." << std::endl;
   parent->_dwn_ptr = std::make_shared<DoorWatcherNode>(
     parent->_model->GetName()+"_watcher_node");
 
@@ -193,12 +132,13 @@ std::shared_ptr<DoorWatcherNode> DoorWatcherNode::init_and_make(
   gazebo::transport::NodePtr node(new gazebo::transport::Node());
   node->Init();
   const auto& name = parent->_model->GetName();
+  auto dwn_ptr = parent->_dwn_ptr.get();
   gazebo::transport::SubscriberPtr sub1 = node->Subscribe(
-    "~/"+name+"/"+name+"_sensor_1/link/hokuyo/scan",
-    &DoorWatcherNode::cb1, parent->_dwn_ptr.get());
+    " ~/"+name+"/"+name+"_sensor_1/link/hokuyo/scan",
+    &DoorWatcherNode::cb1, dwn_ptr);
   gazebo::transport::SubscriberPtr sub2 = node->Subscribe(
-    "~/"+name+"/"+name+"_sensor_2/link/hokuyo/scan",
-    &DoorWatcherNode::cb2, parent->_dwn_ptr.get());
+    " ~/"+name+"/"+name+"_sensor_2/link/hokuyo/scan",
+    &DoorWatcherNode::cb2, dwn_ptr);
   parent->_dwn_ptr->_door_state_sub =
     parent->_dwn_ptr->create_subscription<DoorState>(
     "door_states", rclcpp::SystemDefaultsQoS(),
@@ -212,8 +152,5 @@ std::shared_ptr<DoorWatcherNode> DoorWatcherNode::init_and_make(
   rclcpp::shutdown();
 }
 
-GZ_REGISTER_MODEL_PLUGIN(AutomaticDoorPlugin)
-}
-
-
+} // namespace automatic_door
 } // namespace building_gazebo_plugins

@@ -68,8 +68,9 @@ target_include_directories(slotcar
 ###############################
 # automatic door stuff
 ###############################
-
-add_library(automatic_door SHARED src/automatic_door.cpp)
+add_library(automatic_door
+SHARED
+  src/automatic_door.cpp)
 
 ament_target_dependencies(automatic_door
   building_sim_common

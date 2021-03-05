@@ -168,6 +168,7 @@ std::vector<DoorCommon::DoorUpdateResult> DoorCommon::update(
           request.velocity,
           dt);
       }
+      //std::cout << result.velocity << std::endl;
       results.push_back(result);
     }
     else
@@ -190,14 +191,17 @@ std::vector<DoorCommon::DoorUpdateResult> DoorCommon::update(
     if (all_doors_open())
     {
       publish_state(DoorMode::MODE_OPEN, now);
+      //std::cout << "published MODE_OPEN" << std::endl;
     }
     else if (all_doors_closed())
     {
       publish_state(DoorMode::MODE_CLOSED, now);
+      //std::cout << "published MODE_CLOSED" << std::endl;
     }
     else
     {
       publish_state(DoorMode::MODE_MOVING, now);
+      //std::cout << "published MODE_MOVING" << std::endl;
     }
   }
 

@@ -1470,8 +1470,17 @@ void Editor::populate_property_editor(const Edge& edge)
       connect(
         plugin_combo,
         &QComboBox::currentTextChanged,
-        [this, vertex](const QString& text)
+        [&](const QString& text)
         {
+          for (auto& e : project.building.levels[level_idx].edges)
+          {
+            if (!e.selected)
+              continue;
+            e.set_param(param.first, text.toStdString());
+            create_scene();
+            setWindowModified(true);
+            return;  // stop after finding the first one
+          }
         }
       );
       property_editor->setItem(row, 0, label_item);

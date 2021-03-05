@@ -15,69 +15,63 @@
  *
 */
 
-#ifndef BUILDING_SIM_COMMON__AUTOMATIC_DOOR_GAZEBO_HPP
-#define BUILDING_SIM_COMMON__AUTOMATIC_DOOR_GAZEBO_HPP
+#ifndef BUILDING_SIM_COMMON__AUTOMATIC_DOOR_IGN_HPP
+#define BUILDING_SIM_COMMON__AUTOMATIC_DOOR_IGN_HPP
 
-#include <gazebo/common/Plugin.hh>
-#include <gazebo/physics/Model.hh>
-#include <gazebo/physics/World.hh>
-#include <gazebo/physics/Joint.hh>
-#include <gazebo_ros/node.hpp>
+
+#include <ignition/plugin/Register.hh>
+
+#include <ignition/gazebo/System.hh>
+#include <ignition/gazebo/Model.hh>
+#include <ignition/gazebo/components/JointAxis.hh>
+#include <ignition/gazebo/components/JointPosition.hh>
+#include <ignition/gazebo/components/JointVelocity.hh>
+#include <ignition/gazebo/components/JointVelocityCmd.hh>
+
 #include <rclcpp/rclcpp.hpp>
-
 #include <google/protobuf/descriptor.h>
-#include <gazebo/transport/transport.hh>
+#include <ignition/transport/Node.hh>
 #include <building_sim_common/utils.hpp>
 #include <building_sim_common/door_common.hpp>
 
+using namespace ignition;
+using namespace gazebo;
+using namespace systems;
+
 using namespace building_sim_common;
 
-//class test;
+namespace building_ignition_plugins {
 
-namespace building_gazebo_plugins {
 //==============================================================================
-
-namespace automatic_door {
-class AutomaticDoorPlugin;
-class DoorWatcherNode;
-
-using DoorMode = rmf_door_msgs::msg::DoorMode;
-using DoorState = rmf_door_msgs::msg::DoorState;
-using DoorRequest = rmf_door_msgs::msg::DoorRequest;
-
 using namespace google::protobuf;
-
-
-class AutomaticDoorPlugin : public gazebo::ModelPlugin
+class IGNITION_GAZEBO_VISIBLE AutomaticDoorPlugin
+  : public System,
+  public ISystemConfigure,
+  public ISystemPreUpdate
 {
-public:
-  AutomaticDoorPlugin()
-  {
-  }
+private:
+  rclcpp::Node::SharedPtr _ros_node;
+  std::thread _main_thread;
+  std::unordered_map<std::string, Entity> _joints;
 
+  std::shared_ptr<DoorCommon> _door_common = nullptr;
+
+  bool _initialized = false;
+
+  void create_entity_components(Entity entity, EntityComponentManager& ecm);
+
+public:
+  AutomaticDoorPlugin() {}
   ~AutomaticDoorPlugin()
   {
     if (_main_thread.joinable())
       _main_thread.join();
   }
-
-  void Load(gazebo::physics::ModelPtr model, sdf::ElementPtr sdf) override;
-  std::shared_ptr<DoorCommon> _door_common = nullptr;
-  std::shared_ptr<DoorWatcherNode> _dwn_ptr = nullptr;
-  gazebo::physics::ModelPtr _model;
-  void on_update();
-
   struct moving_state
   {
-    enum current_state
-    {
-      OPEN,
-      OPENING,
-      CLOSED,
-      CLOSING
-    } _current_state = CLOSED;
-    int _recent_velocity_sign[10] = {0}; // plus as true and minus as false
-    int index = 0;
+    enum current_state { OPEN, OPENING, CLOSED, CLOSING} _current_state;
+    int _recent_velocity_sign[10]; // plus as true and minus as false
+    int index;
     void set_velocity_sign(double velocity)
     {
       if (velocity > 1e-10)
@@ -112,14 +106,16 @@ public:
     }
   } ms;
 
-private:
-  std::thread _main_thread;
-  gazebo::event::ConnectionPtr _update_connection;
-  std::unordered_map<std::string, gazebo::physics::JointPtr> _joints;
-  bool _initialized = false;
+  void Configure(const Entity& entity,
+    const std::shared_ptr<const sdf::Element>& sdf,
+    EntityComponentManager& ecm, EventManager& /*_eventMgr*/) override;
+
+  void PreUpdate(const UpdateInfo& info, EntityComponentManager& ecm) override;
+  ignition::transport::Node _ign_node;
+  std::string _name;
 };
 
-//==============================================================================
+
 class DoorWatcherNode : public rclcpp::Node
 {
 public:
@@ -145,8 +141,8 @@ public:
   AutomaticDoorPlugin* _parent;
   bool _last_fluctuation;
 
-  DoorWatcherNode(std::string door_watcher_name)
-  : rclcpp::Node(door_watcher_name)
+  DoorWatcherNode()
+  : rclcpp::Node("door_watcher")
   {
     const auto default_qos = rclcpp::SystemDefaultsQoS();
     _door_request_pub = create_publisher<DoorRequest>(
@@ -155,20 +151,18 @@ public:
     _timer = false;
   }
   ~DoorWatcherNode() {}
-  static std::shared_ptr<DoorWatcherNode> init_and_make(
-    AutomaticDoorPlugin* parent);
-  void cb1(ConstLaserScanStampedPtr& _msg);
-  void cb2(ConstLaserScanStampedPtr& _msg);
-  static void cb3(ConstLaserScanStampedPtr& _msg);
-  void process_scan_and_actuate(ConstLaserScanStampedPtr& _msg,
+  static void init_and_make(AutomaticDoorPlugin* parent);
+  static void cb1(const ignition::msgs::LaserScan& msg);
+  static void cb2(const ignition::msgs::LaserScan& msg);
+  static void process_scan_and_actuate(const ignition::msgs::LaserScan& msg,
     std::vector<double>& _previous_scan);
   uint16_t _timestep;
   bool _timer;
 };
 
-//typedef std::shared_ptr<DoorWatcherNode> _DWN_PTR;
-//_DWN_PTR dwn_ptr = nullptr;
-}
-} // namespace building_gazebo_plugins
+typedef std::shared_ptr<DoorWatcherNode> _DWN_PTR;
+_DWN_PTR dwn_ptr = nullptr;
 
-#endif // BUILDING_SIM_COMMON__AUTOMATIC_DOOR_GAZEBO_HPP
+} // namespace building_ignition_plugins
+
+#endif // BUILDING_SIM_COMMON__AUTOMATIC_DOOR_IGN_HPP
